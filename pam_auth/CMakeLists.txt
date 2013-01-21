@@ -1,0 +1,1 @@
+MYSQL_ADD_PLUGIN(pam_auth pam_auth.c LINK_LIBRARIES pam)

@@ -1,0 +1,2 @@
+MYSQL_ADD_PLUGIN(query_cache_results mysql_query_cache.h query_cache_results.cc MODULE_ONLY)
+MYSQL_ADD_PLUGIN(query_cache_tables mysql_query_cache.h query_cache_tables.cc MODULE_ONLY)

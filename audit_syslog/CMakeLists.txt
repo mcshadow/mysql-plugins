@@ -1,0 +1,1 @@
+MYSQL_ADD_PLUGIN(audit_syslog audit_syslog.cc MODULE_ONLY)

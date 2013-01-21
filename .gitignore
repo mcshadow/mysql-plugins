@@ -11,3 +11,8 @@
 *.lai
 *.la
 *.a
+
+# cmake
+CMakeFiles
+cmake_install.cmake
+Makefile
