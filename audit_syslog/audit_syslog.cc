@@ -4,7 +4,13 @@
    Licence: GPL
    Description: syslog audit plugin.
 */
+#define MYSQL_SERVER
+
+#include <my_pthread.h>
+#include <sql_priv.h>
 #include <mysql/plugin.h>
+#include <sql_class.h>
+
 #include <mysql/plugin_audit.h>
 #include <syslog.h>                             // syslog
 #include <string.h>                             // strcasestr
@@ -16,9 +22,7 @@
 #define __attribute__(A)
 #endif
 
-/* longest valid value */
-#define MAX_LOG_SIZE 1024
-#define MAX_LOG_QUERY_SIZE 128
+#define MAX_SYSLOG_LEN 1024
 
 /* static counters for SHOW STATUS */
 static volatile int total_number_of_calls;
@@ -76,9 +80,11 @@ static void update_log_level(MYSQL_THD thd, struct st_mysql_sys_var *var,
                              void *tgt, const void *save)
 {
   *(long *)tgt= *(long *) save;
-  char	buffer[MAX_LOG_SIZE];
-  syslog(LOG_WARNING,"[LOG LEVEL CHANGED] %s\n",
-         thd_security_context((THD*) thd, buffer, sizeof buffer, MAX_LOG_QUERY_SIZE));
+  const Security_context *sctx= &((THD*)thd)->main_security_ctx;
+  if (   sctx->host && sctx->user
+	  && strcasestr(sctx->host, audit_host)  != NULL
+	  && strcasestr(sctx->user, replica_username) == NULL)
+    syslog(LOG_WARNING,"[LOG LEVEL CHANGED] host:%s user:%s \n", sctx->host, sctx->user);
 }
 
 /*
@@ -111,6 +117,24 @@ static int audit_syslog_deinit(void *arg __attribute__((unused)))
    Event notifier function
    
 */ 
+void syslog_strip_string(char *result_string,const char *source_string, int source_string_len)
+{
+  int strip_query_len = min(MAX_SYSLOG_LEN - 1, source_string_len);
+  if (strip_query_len > 0)
+  {
+	memcpy(result_string, source_string, strip_query_len);
+	result_string[strip_query_len] = '\0';
+	char *src, *dst;
+	for (src = dst = result_string; *src != '\0'; src++) 
+	{
+	  *dst = *src;
+	  if (*dst != '\r' && *dst != '\n') dst++;
+	}
+	*dst = '\0';
+  }
+  result_string[strip_query_len] = '\0';
+}
+
 static void audit_syslog_notify(MYSQL_THD thd __attribute__((unused)),
                               unsigned int event_class,
                               const void *event)
@@ -119,34 +143,39 @@ static void audit_syslog_notify(MYSQL_THD thd __attribute__((unused)),
   if (event_class == MYSQL_AUDIT_GENERAL_CLASS)         
   {
     const struct mysql_event_general *event_general=    
-      (const struct mysql_event_general *) event; 
+      (const struct mysql_event_general *) event;
 	 if (   event_general != NULL && event_general->general_user_length >  0
 	     && strcasestr(event_general->general_user, audit_host)  != NULL
 	     && strcasestr(event_general->general_user, replica_username) == NULL)
 	{
+	  char strip_query[MAX_SYSLOG_LEN];
+	  char strip_command[MAX_SYSLOG_LEN];
+	  syslog_strip_string(strip_query, event_general->general_query, event_general->general_query_length);
+	  syslog_strip_string(strip_command, event_general->general_command, event_general->general_command_length);
+	  
       number_of_calls_general++;
       switch (event_general->event_subclass)
       {
       case MYSQL_AUDIT_GENERAL_LOG: // LOG events occurs before emitting to the general query log.
         break;
+	  // in case of using stored procedures exceptions raised during procedure execution
+	  // would be logged in the name of user created stored procedure
+	  // even if procedure called from the remote host using the remote user
       case MYSQL_AUDIT_GENERAL_ERROR: // ERROR events occur before transmitting errors to the user.
 	    if (THDVAR(thd, log_level) >= LOG_WARNING)
           syslog(LOG_WARNING,"[QUERY FAILED] %lu: User: %s  Command: %s  Query: %s\n",
-                 event_general->general_thread_id, event_general->general_user,
-                 event_general->general_command, event_general->general_query ); 
+                 event_general->general_thread_id, event_general->general_user, strip_command, strip_query); 
         break;
       case MYSQL_AUDIT_GENERAL_RESULT: // RESULT events occur after transmitting a resultset to the user.
 	    if (THDVAR(thd, log_level) >= (event_general->general_query_length > 0 && strcasestr(event_general->general_query, audit_table) != NULL ? LOG_CRIT : LOG_NOTICE))
           syslog(event_general->general_query_length > 0 && strcasestr(event_general->general_query, audit_table) != NULL ? LOG_CRIT : LOG_NOTICE,
 		         "[QUERY SUCCEEDED] %lu: User: %s  Command: %s  Query: %s\n",
-                 event_general->general_thread_id, event_general->general_user,
-                 event_general->general_command, event_general->general_query );
+                 event_general->general_thread_id, event_general->general_user, strip_command, strip_query);
         break;
       case MYSQL_AUDIT_GENERAL_STATUS: // STATUS events occur after transmitting a resultset or errors
 	    if (THDVAR(thd, log_level) >= LOG_NOTICE)
           syslog(LOG_NOTICE,"[QUERY DETAILS] %lu: User: %s  Command: %s  Query: %s\n",
-                 event_general->general_thread_id, event_general->general_user,
-                 event_general->general_command, event_general->general_query );
+                 event_general->general_thread_id, event_general->general_user, strip_command, strip_query);
         break;
       default:
         break;
