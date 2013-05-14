@@ -22,7 +22,11 @@ ST_FIELD_INFO sys_usage_fields[]=
   {0, 0, MYSQL_TYPE_NULL, 0, 0, 0, 0}
 };
   
+#if MYSQL_VERSION_ID > 50600
+static int fill_sys_usage(THD *thd, TABLE_LIST *tables, Item *item)
+#else
 static int fill_sys_usage(THD *thd, TABLE_LIST *tables, COND *cond)
+#endif
 {
   CHARSET_INFO *cs= system_charset_info;
   TABLE *table= tables->table;

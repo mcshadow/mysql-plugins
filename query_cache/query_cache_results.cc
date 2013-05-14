@@ -31,7 +31,11 @@ ST_FIELD_INFO query_cache_result_fields[]=
   {0,0, MYSQL_TYPE_STRING, 0, 0, 0}
 };
 
+#if MYSQL_VERSION_ID > 50600
+static int query_cache_result_fill_table(THD *thd, TABLE_LIST *tables, Item *item)
+#else
 static int query_cache_result_fill_table(THD *thd, TABLE_LIST *tables, COND *cond)
+#endif
 {
   // character set information to store varchar values
   CHARSET_INFO *cs = system_charset_info;
