@@ -81,10 +81,10 @@ static void update_log_level(MYSQL_THD thd, struct st_mysql_sys_var *var,
 {
   *(long *)tgt= *(long *) save;
   const Security_context *sctx= &((THD*)thd)->main_security_ctx;
-  if (   sctx->host && sctx->user
-	  && strcasestr(sctx->host, audit_host)  != NULL
+  if (   sctx->host_or_ip && sctx->user
+	  && strcasestr(sctx->host_or_ip, audit_host)  != NULL
 	  && strcasestr(sctx->user, replica_username) == NULL)
-    syslog(LOG_WARNING,"[LOG LEVEL CHANGED] host:%s user:%s \n", sctx->host, sctx->user);
+    syslog(LOG_WARNING,"[LOG LEVEL CHANGED] host:%s user:%s \n", sctx->host_or_ip, sctx->user);
 }
 
 /*
@@ -119,7 +119,7 @@ static int audit_syslog_deinit(void *arg __attribute__((unused)))
 */ 
 void syslog_strip_string(char *result_string,const char *source_string, int source_string_len)
 {
-  int strip_query_len = std::min(MAX_SYSLOG_LEN - 1, source_string_len);
+  int strip_query_len = min(MAX_SYSLOG_LEN - 1, source_string_len);
   if (strip_query_len > 0)
   {
 	memcpy(result_string, source_string, strip_query_len);
