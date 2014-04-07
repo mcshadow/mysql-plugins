@@ -199,8 +199,11 @@ static void audit_syslog_notify(MYSQL_THD thd __attribute__((unused)),
   {
     const struct mysql_event_connection *event_connection=
       (const struct mysql_event_connection *) event;
-	if (   event_connection != NULL && event_connection->host_length > 0
+	if (   event_connection != NULL 
+      && event_connection->host_length > 0
 	    && strcasestr(event_connection->host, audit_host) != NULL
+      && event_connection->user_length > 0
+      && strcasestr(event_connection->user, replica_username) == NULL
 	   )
 	{
       number_of_calls_connection++;
