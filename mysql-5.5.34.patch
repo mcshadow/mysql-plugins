@@ -29,9 +29,7 @@ diff -Nur mysql-5.5.34-orig/plugin/auth/dialog.c mysql-5.5.34-patch/plugin/auth/
 +  {
 +    char *password;
 +    password= getpass("");
-+    strncpy(buf, password, buf_len-1);
-+    buf[buf_len-1]= 0;
-+    free(password);
++    strncpy(buf, password, buf_len);
 +  }
 +  else
 +  {

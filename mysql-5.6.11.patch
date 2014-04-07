@@ -1,3 +1,4 @@
+diff -Naur mysql-5.6.11-orig/plugin/auth/CMakeLists.txt mysql-5.6.11-patch/plugin/auth/CMakeLists.txt
 --- mysql-5.6.11-orig/plugin/auth/CMakeLists.txt	2013-04-05 16:27:18.000000000 +0400
 +++ mysql-5.6.11-patch/plugin/auth/CMakeLists.txt	2013-05-14 13:47:46.000000000 +0400
 @@ -16,6 +16,8 @@
@@ -28,9 +29,7 @@ diff -Naur mysql-5.6.11-orig/plugin/auth/dialog.c mysql-5.6.11-patch/plugin/auth
 +  {
 +    char *password;
 +    password= getpass("");
-+    strncpy(buf, password, buf_len-1);
-+    buf[buf_len-1]= 0;
-+    free(password);
++    strncpy(buf, password, buf_len);
 +  }
 +  else
 +  {
