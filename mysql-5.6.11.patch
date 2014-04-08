@@ -13,7 +13,7 @@ diff -Naur mysql-5.6.11-orig/plugin/auth/CMakeLists.txt mysql-5.6.11-patch/plugi
 diff -Naur mysql-5.6.11-orig/plugin/auth/dialog.c mysql-5.6.11-patch/plugin/auth/dialog.c
 --- mysql-5.6.11-orig/plugin/auth/dialog.c	2013-04-05 16:27:18.000000000 +0400
 +++ mysql-5.6.11-patch/plugin/auth/dialog.c	2013-05-06 16:38:57.000000000 +0400
-@@ -212,13 +212,28 @@
+@@ -212,13 +212,26 @@
                           const char *prompt,
                           char *buf, int buf_len)
  {
