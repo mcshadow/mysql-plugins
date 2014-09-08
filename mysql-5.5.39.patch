@@ -27,8 +27,7 @@ diff -Nur ./mysql-5.5.39/plugin/auth/dialog.c ./mysql-5.5.39.patched/plugin/auth
 +
 +  if (type == 2) /* password */
 +  {
-+    char *password = getenv("MYSQL_PWD");
-+    if (strlen(password) == 0) password = getpass(prompt);
++    char *password = (getenv("MYSQL_PWD") ? getenv("MYSQL_PWD") : getpass(prompt));
 +    strncpy(buf, password, buf_len);
 +  }
 +  else
