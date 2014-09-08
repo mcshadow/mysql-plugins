@@ -4,7 +4,11 @@
 
 bool schema_table_store_record(THD *thd,TABLE *table);
 
-#include <sys/sysinfo.h>    //getrusage
+#ifdef __APPLE__
+  #include <sys/resource.h>   //getrusage
+#else
+  #include <sys/sysinfo.h>    //getrusage
+#endif
 
 /*insert macro*/
 #define INSERT(NAME,VALUE)                            \
@@ -30,12 +34,12 @@ static int fill_sys_usage(THD *thd, TABLE_LIST *tables, COND *cond)
 {
   CHARSET_INFO *cs= system_charset_info;
   TABLE *table= tables->table;
-  	  
-  INSERT("Total physical memory",
-         get_phys_pages() * getpagesize());
-  INSERT("Available physical memory",
-         get_avphys_pages() * getpagesize());
-  INSERT("Number of CPUs", get_nprocs());
+
+  #ifndef __APPLE__
+    INSERT("Total physical memory", get_phys_pages() * getpagesize());
+    INSERT("Available physical memory", get_avphys_pages() * getpagesize());
+    INSERT("Number of CPUs", get_nprocs());
+  #endif
 
   rusage r_usage;
   /*
