@@ -9,6 +9,7 @@
 #include <security/pam_modules.h>
 #include <security/pam_appl.h>
 #include <stdio.h>
+#include <syslog.h>                             // syslog
 
 struct param {
   unsigned char buf[10240], *ptr;
@@ -73,7 +74,10 @@ static int conv(int n, const struct pam_message **msg,
   do {                                  \
     status = (X);                       \
     if (status != PAM_SUCCESS)          \
+    {                                   \
+      syslog(LOG_ERR, "[AUTH FAILED] Reason: %s", pam_strerror(pamh, status)); \
       goto ret;                         \
+    }                                   \
   } while(0)
 
 static int pam_auth(MYSQL_PLUGIN_VIO *vio, MYSQL_SERVER_AUTH_INFO *info)

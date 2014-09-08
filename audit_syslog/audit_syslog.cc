@@ -117,7 +117,7 @@ static int audit_syslog_init(void *arg __attribute__((unused)))
       (Not in POSIX.1-2001.) Print to stderr as well.
       Write directly to system console if there is an error while sending to system logger.
   */
-    openlog("mysql_audit:", LOG_PID|LOG_CONS, LOG_USER); 
+    openlog("mysql_audit", LOG_PID|LOG_CONS, LOG_USER); 
     total_number_of_calls      = 0;
     number_of_calls_general    = 0;
     number_of_calls_connection = 0;
