@@ -6,7 +6,7 @@ bool schema_table_store_record(THD *thd,TABLE *table);
 
 #ifdef __APPLE__
   #include <sys/resource.h>   //getrusage
-#else
+#elif !defined( _WINDOWS )
   #include <sys/sysinfo.h>    //getrusage
 #endif
 
@@ -36,9 +36,11 @@ static int fill_sys_usage(THD *thd, TABLE_LIST *tables, COND *cond)
   TABLE *table= tables->table;
 
   #ifndef __APPLE__
-    INSERT("Total physical memory", get_phys_pages() * getpagesize());
-    INSERT("Available physical memory", get_avphys_pages() * getpagesize());
-    INSERT("Number of CPUs", get_nprocs());
+    #ifndef _WINDOWS
+      INSERT("Total physical memory", get_phys_pages() * getpagesize());
+      INSERT("Available physical memory", get_avphys_pages() * getpagesize());
+      INSERT("Number of CPUs", get_nprocs());
+    #endif
   #endif
 
   rusage r_usage;
@@ -62,44 +64,48 @@ static int fill_sys_usage(THD *thd, TABLE_LIST *tables, COND *cond)
 	   long   ru_nivcsw;        // involuntary context switches 
    };
   */  
-  if (getrusage(RUSAGE_SELF, &r_usage))
-    return 1;
-  INSERT("user CPU time used",  r_usage.ru_utime.tv_sec);
-  INSERT("system CPU time used", r_usage.ru_stime.tv_sec);
-  INSERT("maximum resident set size", r_usage.ru_maxrss);
-  INSERT("integral shared memory size", r_usage.ru_ixrss);         
-  INSERT("integral unshared data size", r_usage.ru_idrss);          
-  INSERT("integral unshared stack size", r_usage.ru_isrss);           
-  INSERT("page reclaims (soft page faults)", r_usage.ru_minflt);          
-  INSERT("page faults (hard page faults)", r_usage.ru_majflt);         
-  INSERT("swaps", r_usage.ru_nswap);        
-  INSERT("block input operations", r_usage.ru_inblock);         
-  INSERT("block output operations", r_usage.ru_oublock);         
-  INSERT("IPC messages sent", r_usage.ru_msgsnd);          
-  INSERT("IPC messages received", r_usage.ru_msgrcv);
-  INSERT("signals received", r_usage.ru_nsignals);        
-  INSERT("voluntary context switches", r_usage.ru_nvcsw);          
-  INSERT("involuntary context switches", r_usage.ru_nivcsw);   
-  
-  rlimit r_limit;
-  /*
-   struct rlimit {
-	   rlim_t rlim_cur;  // Soft limit 
-	   rlim_t rlim_max;  // Hard limit (ceiling for rlim_cur) 
-   };
-  */
-  if (getrlimit(RLIMIT_AS, &r_limit))
-    return 1;
-  INSERT("Maximum virtual memory", r_limit.rlim_cur);
-  if (getrlimit(RLIMIT_DATA, &r_limit))
-    return 1;
-  INSERT("Maximum data memory", r_limit.rlim_cur);
-  if (getrlimit(RLIMIT_FSIZE, &r_limit))
-    return 1;
-  INSERT("Maximum file size", r_limit.rlim_cur);
-  if (getrlimit(RLIMIT_NOFILE, &r_limit))
-    return 1;
-  INSERT("Maximum number of files", r_limit.rlim_cur);
+  #ifdef _WINDOWS
+    INSERT("swaps", 0);        
+  #else
+    if (getrusage(RUSAGE_SELF, &r_usage))
+      return 1;
+    INSERT("user CPU time used",  r_usage.ru_utime.tv_sec);
+    INSERT("system CPU time used", r_usage.ru_stime.tv_sec);
+    INSERT("maximum resident set size", r_usage.ru_maxrss);
+    INSERT("integral shared memory size", r_usage.ru_ixrss);         
+    INSERT("integral unshared data size", r_usage.ru_idrss);          
+    INSERT("integral unshared stack size", r_usage.ru_isrss);           
+    INSERT("page reclaims (soft page faults)", r_usage.ru_minflt);          
+    INSERT("page faults (hard page faults)", r_usage.ru_majflt);         
+    INSERT("swaps", r_usage.ru_nswap);        
+    INSERT("block input operations", r_usage.ru_inblock);         
+    INSERT("block output operations", r_usage.ru_oublock);         
+    INSERT("IPC messages sent", r_usage.ru_msgsnd);          
+    INSERT("IPC messages received", r_usage.ru_msgrcv);
+    INSERT("signals received", r_usage.ru_nsignals);        
+    INSERT("voluntary context switches", r_usage.ru_nvcsw);          
+    INSERT("involuntary context switches", r_usage.ru_nivcsw);   
+    
+    rlimit r_limit;
+    /*
+     struct rlimit {
+       rlim_t rlim_cur;  // Soft limit 
+       rlim_t rlim_max;  // Hard limit (ceiling for rlim_cur) 
+     };
+    */
+    if (getrlimit(RLIMIT_AS, &r_limit))
+      return 1;
+    INSERT("Maximum virtual memory", r_limit.rlim_cur);
+    if (getrlimit(RLIMIT_DATA, &r_limit))
+      return 1;
+    INSERT("Maximum data memory", r_limit.rlim_cur);
+    if (getrlimit(RLIMIT_FSIZE, &r_limit))
+      return 1;
+    INSERT("Maximum file size", r_limit.rlim_cur);
+    if (getrlimit(RLIMIT_NOFILE, &r_limit))
+      return 1;
+    INSERT("Maximum number of files", r_limit.rlim_cur);
+  #endif
 
   return 0;
 }
