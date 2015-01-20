@@ -1,0 +1,45 @@
+diff -Nur ./mysql-5.5.41/plugin/auth/CMakeLists.txt ./mysql-5.5.41.patched/plugin/auth/CMakeLists.txt
+--- ./mysql-5.5.41/plugin/auth/CMakeLists.txt	2015-01-20 13:20:30.000000000 +0300
++++ ./mysql-5.5.41.patched/plugin/auth/CMakeLists.txt	2015-01-20 13:16:39.000000000 +0300
+@@ -16,6 +16,8 @@
+ 
+ MYSQL_ADD_PLUGIN(auth dialog.c 
+   MODULE_ONLY)
++MYSQL_ADD_PLUGIN(dialog dialog.c 
++  MODULE_ONLY)
+ MYSQL_ADD_PLUGIN(auth_test_plugin test_plugin.c 
+   MODULE_ONLY)
+ MYSQL_ADD_PLUGIN(qa_auth_interface qa_auth_interface.c
+diff -Nur ./mysql-5.5.41/plugin/auth/dialog.c ./mysql-5.5.41.patched/plugin/auth/dialog.c
+--- ./mysql-5.5.41/plugin/auth/dialog.c	2015-01-20 13:09:50.000000000 +0300
++++ ./mysql-5.5.41.patched/plugin/auth/dialog.c	2015-01-20 13:11:16.000000000 +0300
+@@ -212,13 +212,22 @@
+                          const char *prompt,
+                          char *buf, int buf_len)
+ {
+-  char *ptr;
+-  fputs(prompt, stdout);
+-  fputc(' ', stdout);
+-  if (fgets(buf, buf_len, stdin) == NULL)
+-    return NULL;
+-  if ((ptr= strchr(buf, '\n')))
+-    *ptr= 0;
++  if (type == 2) /* password */
++  {
++    char *password = (getenv("MYSQL_PWD") ? getenv("MYSQL_PWD") : getpass(prompt));
++    strncpy(buf, password, buf_len);
++  }
++  else
++  {
++    if (!fgets(buf, buf_len-1, stdin))
++      buf[0]= 0;
++    else
++    {
++      int len= strlen(buf);
++      if (len && buf[len-1] == '\n')
++        buf[len-1]= 0;
++    }
++  }
+ 
+   return buf;
+ }
