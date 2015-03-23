@@ -101,9 +101,9 @@ static void update_log_level(MYSQL_THD thd, struct st_mysql_sys_var *var,
 {
   *(long *)tgt= *(long *) save;
   const Security_context *sctx= &((THD*)thd)->main_security_ctx;
-  if (   sctx->host_or_ip && sctx->user
-    && strcasestr(sctx->host_or_ip, audit_host)  != NULL
-    && strcasestr(sctx->user, audit_ignore_username) == NULL)
+  if (    sctx->host_or_ip && sctx->user
+       && strcasestr(sctx->host_or_ip, audit_host) != NULL
+       && strcasestr(sctx->user, audit_ignore_username) == NULL)
     syslog(inc_log_level ? LOG_CRIT : LOG_WARNING,"[LOG LEVEL CHANGED] host:%s user:%s \n", sctx->host_or_ip, sctx->user);
 }
 
@@ -232,11 +232,31 @@ static bool check_crit_schema(MYSQL_THD thd, const char * audit_crit_schema)
 {
   TABLE_LIST *table_list;
 
+  int audit_crit_schema_len = strlen(audit_crit_schema);
+  if( audit_crit_schema_len <=0 || audit_crit_schema_len > 64 ) {
+      syslog(LOG_ERR,"[SCHEMA IS WRONG] len:%d\n", audit_crit_schema_len);
+      return false;
+  }
+
   if (thd && thd->lex && thd->lex->query_tables)
   {
     for(table_list = thd->lex->query_tables; table_list && table_list->db; table_list = table_list->next_local)
     {
-      if (strcasestr(audit_crit_schema, table_list->db) != NULL)
+      int db_len = table_list->db_length;
+
+      if(db_len <=0 || db_len > 64) {
+        syslog(LOG_ERR,"[TABLE SCHEMA IS WRONG] len:%d\n", db_len);
+        continue;
+      }
+
+      if(table_list->db == NULL) {
+        syslog(LOG_ERR,"[TABLE SCHEMA DB IS NULL] len:%d\n", db_len);
+        continue;
+      }
+
+      int max_curr_str_len = db_len > audit_crit_schema_len ? db_len : audit_crit_schema_len;
+
+      if (strncasecmp(audit_crit_schema, table_list->db, max_curr_str_len) == 0)
         return true;
     }    
   }
@@ -399,7 +419,7 @@ mysql_declare_plugin(audit_syslog)
   PLUGIN_LICENSE_GPL,
   audit_syslog_init,          /* init function (when loaded)     */
   audit_syslog_deinit,        /* deinit function (when unloaded) */
-  0x0002,                     /* version                         */
+  0x0003,                     /* version                         */
   audit_syslog_status,        /* status variables                */
   audit_syslog_sysvars,       /* system variables                */
   NULL,
