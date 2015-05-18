@@ -50,11 +50,11 @@ static TYPELIB log_levels = { 8, NULL, log_level_names, NULL }; // need to set v
 /* function prototypes */
 static void update_log_level(MYSQL_THD thd, struct st_mysql_sys_var *var, void *tgt, const void *save);
 static bool verify_schemas_owner(MYSQL_THD thd, const char * current_user);
-static bool check_crit_schema(MYSQL_THD thd, const char * audit_crit_schema);
+static bool check_crit_schema(MYSQL_THD thd);
 
 void syslog_strip_string(char *result_string, const char *source_string, int source_string_len);
-bool schema_belongs_to_user(const char * current_user, const char * current_schema);
-bool schema_is_technical(const char* schema_name);
+bool schema_belongs_to_user(const char * current_user, const char * current_schema, int schema_len);
+bool schema_is_technical(const char* schema_name, int schema_len);
 bool host_ignored(const char* current_user);
 bool user_ignored(const char* current_host_or_ip);
 /*
@@ -154,10 +154,10 @@ void syslog_strip_string(char *result_string,const char *source_string, int sour
   result_string[strip_query_len] = '\0';
 }
 
-bool schema_belongs_to_user(const char * current_user, const char * current_schema)
+bool schema_belongs_to_user(const char * current_user, const char * current_schema, int schema_len)
 {
   int current_user_len = strlen(current_user);
-  int current_schema_len = strlen(current_schema);
+  int current_schema_len = schema_len;
   if (current_user_len == 0 && current_schema_len == 0)
     return false;
 
@@ -183,11 +183,11 @@ bool schema_belongs_to_user(const char * current_user, const char * current_sche
   return false;
 }
 
-bool schema_is_technical(const char* schema_name)
+bool schema_is_technical(const char* schema_name, int schema_len)
 {
   const char allowed_schema[19] = "information_schema";
 
-  return strncasecmp(allowed_schema, schema_name, (19 > strlen(schema_name) ? 19 : strlen(schema_name))) == 0;
+  return strncasecmp(allowed_schema, schema_name, (19 > schema_len ? 19 : schema_len)) == 0;
 }
 
 bool user_ignored(const char* current_user)
@@ -211,7 +211,15 @@ static bool verify_schemas_owner(MYSQL_THD thd, const char * current_user)
 
   if (thd && thd->db)
   {
-    user_in_own_schema = schema_belongs_to_user(current_user, thd->db);
+    int db_len = thd->db_length;
+    
+    if(db_len <=0 || db_len > 64) {
+      syslog(LOG_ERR,"[verify_schemas_owner: thd->db_length WRONG] len:%d\n", db_len);
+    }
+    else {
+      user_in_own_schema = schema_belongs_to_user(current_user, thd->db, db_len);
+    }
+
   }
 
   user_verified = user_in_own_schema;
@@ -220,7 +228,19 @@ static bool verify_schemas_owner(MYSQL_THD thd, const char * current_user)
   {
     for(table_list = thd->lex->query_tables; table_list && table_list->db && user_verified; table_list = table_list->next_local)
     {
-      if (!schema_is_technical(table_list->db) && !schema_belongs_to_user(current_user, table_list->db))
+      int db_len = table_list->db_length;
+
+      if(db_len <=0 || db_len > 64) {
+        syslog(LOG_ERR,"[verify_schemas_owner: table_list->db_length WRONG] len:%d\n", db_len);
+        continue;
+      }
+
+      if(table_list->db == NULL) {
+        syslog(LOG_ERR,"[verify_schemas_owner: table_list->db IS NULL] len:%d\n", db_len);
+        continue;
+      }
+
+      if (!schema_is_technical(table_list->db, db_len) && !schema_belongs_to_user(current_user, table_list->db, db_len))
         user_verified = false;
     }
   }
@@ -228,13 +248,13 @@ static bool verify_schemas_owner(MYSQL_THD thd, const char * current_user)
   return user_verified;
 }
 
-static bool check_crit_schema(MYSQL_THD thd, const char * audit_crit_schema)
+static bool check_crit_schema(MYSQL_THD thd)
 {
   TABLE_LIST *table_list;
 
   int audit_crit_schema_len = strlen(audit_crit_schema);
   if( audit_crit_schema_len <=0 || audit_crit_schema_len > 64 ) {
-      syslog(LOG_ERR,"[SCHEMA IS WRONG] len:%d\n", audit_crit_schema_len);
+      syslog(LOG_ERR,"[check_crit_schema: audit_crit_schema_len WRONG] len:%d\n", audit_crit_schema_len);
       return false;
   }
 
@@ -245,12 +265,12 @@ static bool check_crit_schema(MYSQL_THD thd, const char * audit_crit_schema)
       int db_len = table_list->db_length;
 
       if(db_len <=0 || db_len > 64) {
-        syslog(LOG_ERR,"[TABLE SCHEMA IS WRONG] len:%d\n", db_len);
+        syslog(LOG_ERR,"[check_crit_schema: table_list->db_length WRONG] len:%d\n", db_len);
         continue;
       }
 
       if(table_list->db == NULL) {
-        syslog(LOG_ERR,"[TABLE SCHEMA DB IS NULL] len:%d\n", db_len);
+        syslog(LOG_ERR,"[check_crit_schema: table_list->db IS NULL] len:%d\n", db_len);
         continue;
       }
 
@@ -303,14 +323,14 @@ static void audit_syslog_notify(MYSQL_THD thd, unsigned int event_class, const v
         // would be logged in the name of user created stored procedure
         // even if procedure called from the remote host using the remote user
         case MYSQL_AUDIT_GENERAL_ERROR: // ERROR events occur before transmitting errors to the user.
-          notify_level = (inc_log_level || check_crit_schema(thd, audit_crit_schema) ? LOG_CRIT : LOG_WARNING);
+          notify_level = (inc_log_level || check_crit_schema(thd) ? LOG_CRIT : LOG_WARNING);
 
           if (current_log_level >= notify_level)
               syslog(notify_level,"[QUERY FAILED] %lu: User: %s  Command: %s  Query: %s\n",
                      event_general->general_thread_id, event_general->general_user, strip_command, strip_query); 
           break;
         case MYSQL_AUDIT_GENERAL_RESULT: // RESULT events occur after transmitting a resultset to the user.
-          notify_level = (inc_log_level || check_crit_schema(thd, audit_crit_schema) ? LOG_CRIT : LOG_NOTICE);
+          notify_level = (inc_log_level || check_crit_schema(thd) ? LOG_CRIT : LOG_NOTICE);
 
           if (current_log_level >= notify_level && !verified_schemas_only)
               syslog(notify_level,
@@ -318,7 +338,7 @@ static void audit_syslog_notify(MYSQL_THD thd, unsigned int event_class, const v
                      event_general->general_thread_id, event_general->general_user, strip_command, strip_query);
           break;
         case MYSQL_AUDIT_GENERAL_STATUS: // STATUS events occur after transmitting a resultset or errors
-          notify_level = (inc_log_level || check_crit_schema(thd, audit_crit_schema) ? LOG_CRIT : LOG_NOTICE);
+          notify_level = (inc_log_level || check_crit_schema(thd) ? LOG_CRIT : LOG_NOTICE);
 
           if (    current_log_level >= notify_level
                && (!verified_schemas_only || NVL(event_general->general_error_code, 0) != 0)
